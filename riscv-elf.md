@@ -962,6 +962,13 @@ typedef struct
 
 ## <a name=note-sections></a>Note Sections
 
+There are currently no official RISC-V specific note types in use.
+
+The note type `NT_RISCV_CSR` has been proposed for the Linux kernel
+with the value `0x900`.  This note would be used for holding the
+control status registers.  So far this change has not been merged so
+the note number could be subject to change.
+
 ## <a name=dynamic-table></a>Dynamic Table
 
 ## <a name=hash-table></a>Hash Table
