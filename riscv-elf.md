@@ -31,7 +31,11 @@
 6. [Linux-specific ABI](#linux-abi)
 	* [Linux-specific C type sizes and alignments](#linux-c-type-sizes)
 	* [Linux-specific C type representations](#linux-c-type-representations)
-7. [Terms and definions](#terms-definitions)
+7. [Core Files](#core-files)
+	* [Linux Core Files](#linux-core-files)
+	* [FreeBSD Core Files](#freebsd-core-files)
+	* [Bare Metal Core Files](#baremetal-core-files)
+8. [Terms and definions](#terms-definitions)
 
 ## Copyright and license information
 
@@ -1021,6 +1025,161 @@ The following definitions apply for all ABIs defined in this document. Here
 there is no differentiation between ILP32 and LP64 abis.
 
 `wchar_t` is signed.  `wint_t` is unsigned.
+
+# <a name=core-files></a>Core Files
+
+## <a name=linux-core-files></a>Linux Core Files
+
+## <a name=freebsd-core-files></a>FreeBSD Core Files
+
+## <a name=baremetal-core-files></a>Bare Metal Core Files
+
+The format for bare metal core files is modelled after the Linux core
+file format.  The note types used are identical to the existing Linux
+note types.
+
+The format of the various note types is documented here:
+
+* NT_PRSTATUS
+
+  This note is required and encodes information about the x-registers
+  for a single thread as well as providing a place to record the
+  thread-id and the signal that stopped the thread.  The information
+  in this note is laid out according to the following structures:
+
+  ```
+  struct prstatus32_t
+  {
+    uint8_t padding_1[12];
+    uint16_t sig;
+    uint8_t padding_2[10];
+    uint32_t thread_id;
+    uint8_t padding_3[44];
+    uint32_t x_regs[32];
+    uint8_t padding_4[4];
+  }
+
+  struct prstatus64_t
+  {
+    uint8_t padding_1[12];
+    uint16_t sig;
+    uint8_t padding_2[18];
+    uint32_t thread_id;
+    uint8_t padding_3[76];
+    uint64_t x_regs[32];
+    uint8_t padding_4[4];
+  }
+  ```
+
+  An RV32 target should use `prstatus32_t` and an RV64 target should
+  use `prstatus64_t`.
+
+  All `padding` fields should be filled with zero.
+
+  The `sig` fields indicates the signal that stopped this thread, the
+  exact meaning of the values within this field is implementation
+  defined.
+
+  The `thread-id` field identifies which thread these registers are
+  for.  The exact meaning of `thread-id` on a bare-metal target is
+  implementation defined, but one possibility would be to have one
+  thread represent one hart.
+
+  The `x_regs` field holds the x-registers and the program counter,
+  the ordering is as follows:
+
+  * `pc` - the program counts is placed at position 0 instead of `x0`.
+  * `x1` to `x32` - the x-registers excluding `x0` are placed at
+    positions 1 to 31 in this array.
+
+* NT_FPREGSET
+
+  This note encodes information about the f-registers and is optional.
+  Information in this note is laid out according to the following
+  structures:
+
+  ```
+  fpregset32_t
+  {
+    uint32_t f_regs[32];
+    uint32_t fcsr;
+  }
+
+  fpregset64_t
+  {
+    uint64_t f_regs[32];
+    uint32_t fcsr;
+  }
+  ```
+
+  A target with the F extension would use `fpregset32_t`, while a
+  target with the D extension would use `fpregset64_t`.  A target
+  without floating point support should not include this note.
+
+  The `f_regs` fields holds the f-registers in order.
+
+  The `fcsr` field holds the fcsr register and is always 4 bytes.
+
+* NT_PRPSINFO
+
+  This note encodes information about the executable being run and is
+  optional.  The information in this note is laid out according to the
+  following structures:
+
+  ```
+  struct prpsinfo32_t
+  {
+    uint8_t padding[32];
+    char fname[16];
+    char psargs[80];
+  }
+
+  struct prpsinfo64_t
+  {
+    uint8_t padding[40];
+    char fname[16];
+    char psargs[80];
+  }
+
+  ```
+
+  An RV32 target should create this note based on `prpsinfo32_t`,
+  while an RV64 target should use `prpsinfo64_t`.  The `padding`
+  fields allow for compatibility between bare metal core dumps and
+  Linux core dumps, this compatibility means existing Linux tools can
+  be reused to analyse bare metal core dumps.  The `padding` fields
+  should be written as zero.
+
+  The `fname` field should contains a null terminated string that is
+  up to the first 15 characters (plus a null) for the basename of the
+  executable in use.  If there's no suitable value to write into this
+  field then fill with the null character (zero).
+
+  The `psargs` field should contain the full path to the executable
+  followed by any arguments passed to the executable.  Like `fname`
+  this field must include a terminating null character and so is
+  limited to 79 characters of content.  As with `fname`, if there's
+  nothing appropriate to write into this field then it should be
+  filled with the null character.
+
+The ordering of the notes is important if multiple notes are being
+used to describe the registers of the machine.  The `NT_PRSTATUS` note
+should appear before any other notes describing additional registers
+on the machine.  So `NT_PRSTATUS` then `NT_FPREGSET` is a valid order,
+while `NT_FPREGSET` then `NT_PRSTATUS` is not.
+
+If there are multiple threads in a single core file then there will be
+multiple `NT_PRSTATUS` notes and possibly multiple `NT_FPREGSET`
+notes.  The notes for each thread should be produced in sequence with
+the `NT_PRSTATUS` coming first.
+
+Here is a valid note ordering for a 2 thread system:
+
+* `NT_PRPSINFO` - Generic information that applies to all threads.
+* `NT_PRSTATUS` - The x-registers and thread-id for the first thread.
+* `NT_FPREGSET` - The f-registers for the first thread.
+* `NT_PRSTATUS` - The x-registers and thread-id for the second thread.
+* `NT_FPREGSET` - The f-registers for the second thread.
 
 # <a name=terms-definitions></a> Terms and Definitions
 
